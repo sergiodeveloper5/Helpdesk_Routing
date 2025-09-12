@@ -1,104 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <data noupdate="1">
-        <!-- Sección de Equipos -->
-        <record id="internal_helpdesk_team" model="helpdesk.ticket.team">
-            <field name="name">Equipo de Soporte Interno</field>
-            <field name="active">True</field>
-        </record>
+<data noupdate="1">
+    <!-- Sección de Equipos -->
+    <record id="internal_helpdesk_team" model="helpdesk.ticket.team">
+        <field name="name">Equipo de Soporte Interno</field>
+        <field name="active">True</field>
+    </record>
 
-        <record id="external_helpdesk_team" model="helpdesk.ticket.team">
-            <field name="name">Equipo de Soporte Externo</field>
-            <field name="active">True</field>
-        </record>
+    <record id="external_helpdesk_team" model="helpdesk.ticket.team">
+        <field name="name">Equipo de Soporte Externo</field>
+        <field name="active">True</field>
+    </record>
 
-        <!-- Plantilla de Email Corregida - Campo email_format REMOVIDO -->
-        <record id="ticket_assignment_email_template" model="mail.template">
-            <field name="name">Asignación de Ticket de Mesa de Ayuda</field>
-            <field name="model_id" ref="helpdesk_mgmt.model_helpdesk_ticket"/>
-            <field name="subject">Nuevo Ticket ${'Interno' if object.is_internal_ticket else 'Externo'}: ${object.name}</field>
-            <field name="email_to">${object.team_id.user_id.email}</field>
-            <field name="partner_to">${object.team_id.user_id.partner_id.id}</field>
-            <field name="auto_delete" eval="True"/>
-            <field name="body_html"><![CDATA[
-<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
-    <div style="text-align: center; padding-bottom: 20px; border-bottom: 2px solid #875A7B;">
-        <h1 style="color: #875A7B; margin: 0; font-size: 24px;">Nueva Asignación de Ticket</h1>
-    </div>
-
-    <div style="padding: 20px 0;">
-        <p style="font-size: 16px; color: #333;">Hola <strong>${object.team_id.user_id.name}</strong>,</p>
-
-        <p style="font-size: 16px; color: #333;">
-            Se te ha asignado un nuevo ticket de mesa de ayuda
-            <span style="color: #875A7B; font-weight: bold;">
-                ${'Interno' if object.is_internal_ticket else 'Externo'}
-            </span>:
-        </p>
-
-        <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 20px 0;">
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                    <td style="padding: 8px 0; font-weight: bold; color: #495057; width: 30%;">Número de Ticket:</td>
-                    <td style="padding: 8px 0; color: #333;">${object.name}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px 0; font-weight: bold; color: #495057;">Asunto:</td>
-                    <td style="padding: 8px 0; color: #333;">${object.name or 'Sin asunto proporcionado'}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px 0; font-weight: bold; color: #495057;">Cliente:</td>
-                    <td style="padding: 8px 0; color: #333;">${object.partner_id.name or 'Usuario Invitado'}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px 0; font-weight: bold; color: #495057;">Email:</td>
-                    <td style="padding: 8px 0; color: #333;">${object.partner_email or object.partner_id.email or 'Sin email proporcionado'}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px 0; font-weight: bold; color: #495057;">Dominio:</td>
-                    <td style="padding: 8px 0; color: #333;">${object.email_domain or 'Sin dominio'}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px 0; font-weight: bold; color: #495057;">Equipo:</td>
-                    <td style="padding: 8px 0; color: #333;">${object.team_id.name}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px 0; font-weight: bold; color: #495057;">Prioridad:</td>
-                    <td style="padding: 8px 0;">
-                        <span style="${'color: #dc3545; font-weight: bold;' if object.priority == '3' else 'color: #fd7e14; font-weight: bold;' if object.priority == '2' else 'color: #28a745;'}">
-                            ${'Alta' if object.priority == '3' else 'Media' if object.priority == '2' else 'Baja'}
-                        </span>
-                    </td>
-                </tr>
-            </table>
-        </div>
-
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="${object.get_base_url()}/web#id=${object.id}&amp;model=helpdesk.ticket&amp;view_type=form"
-               style="
-                   background-color: #875A7B;
-                   color: white;
-                   padding: 12px 30px;
-                   text-decoration: none;
-                   border-radius: 6px;
-                   display: inline-block;
-                   font-weight: bold;
-                   font-size: 16px;
-                   box-shadow: 0 2px 4px rgba(135, 90, 123, 0.3);
-               ">
-                🎫 Ver Detalles del Ticket
-            </a>
-        </div>
-    </div>
-
-    <div style="border-top: 1px solid #dee2e6; padding-top: 15px; margin-top: 30px;">
-        <p style="font-size: 12px; color: #6c757d; text-align: center; margin: 0;">
-            Esta es una notificación automática del Sistema de Mesa de Ayuda.<br/>
-            Por favor no responda directamente a este email.
-        </p>
-    </div>
-</div>
-            ]]></field>
-        </record>
-    </data>
+    <!-- Plantilla de Email Básica -->
+    <record id="ticket_assignment_email_template" model="mail.template">
+        <field name="name">Asignación de Ticket de Mesa de Ayuda</field>
+        <field name="model_id" ref="helpdesk_mgmt.model_helpdesk_ticket" />
+        <field name="subject">Nuevo Ticket: {{object.name}}</field>
+        <field name="email_to">{{object.team_id.user_id.email}}</field>
+        <field name="auto_delete" eval="True"/>
+        <field name="body_html"><![CDATA[
+<p>Hola {{object.team_id.user_id.name}},</p>
+<p>Se te ha asignado un nuevo ticket de mesa de ayuda:</p>
+<ul>
+    <li><strong>Número de Ticket:</strong> {{object.name}}</li>
+    <li><strong>Cliente:</strong> {{object.partner_id.name or 'Usuario Invitado'}}</li>
+    <li><strong>Email:</strong> {{object.partner_email or (object.partner_id.email if object.partner_id else 'Sin email')}}</li>
+    <li><strong>Equipo:</strong> {{object.team_id.name}}</li>
+</ul>
+<p><a href="{{object.get_base_url()}}/web#id={{object.id}}&amp;model=helpdesk.ticket&amp;view_type=form">Ver Detalles del Ticket</a></p>
+<p>Saludos,<br/>Sistema de Mesa de Ayuda</p>
+        ]]></field>
+    </record>
+</data>
 </odoo>

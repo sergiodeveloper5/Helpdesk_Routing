@@ -131,24 +131,39 @@ class HelpdeskTicket(models.Model):
         except Exception as e:
             _logger.error(f"Could not send email notification for ticket {self.name}: {e}")
 
-        # Send in-app notification (chatter message) - simplified version
+        # Send in-app notification (chatter message) - use template directly
         try:
-            ticket_type = "Internal" if self.is_internal_ticket else "External"
-            simple_body = f"""
-            <p>New {ticket_type.lower()} ticket assigned to your team.</p>
-            <p><strong>Ticket:</strong> {self.name}<br/>
-            <strong>Customer:</strong> {self.partner_id.name if self.partner_id else 'Guest'}<br/>
-            <strong>Email:</strong> {self.partner_email or (self.partner_id.email if self.partner_id else 'No email')}</p>
-            """
+            mail_template = self.env.ref('Helpdesk_Routing.ticket_assignment_email_template', raise_if_not_found=False)
+            if mail_template:
+                # Use the template's send_mail method but post to chatter instead
+                mail_values = mail_template.generate_email([self.id])[self.id]
+                
+                self.message_post(
+                    body=mail_values.get('body_html', ''),
+                    subject=mail_values.get('subject', ''),
+                    partner_ids=[team_leader.partner_id.id],
+                    message_type='notification',
+                    subtype_xmlid='mail.mt_note'
+                )
+                _logger.info(f"Sent template-generated notification to team leader {team_leader.name} for ticket {self.name}")
+            else:
+                # Fallback to simple notification if template not found
+                ticket_type = "Internal" if self.is_internal_ticket else "External"
+                simple_body = f"""
+                <p>New {ticket_type.lower()} ticket assigned to your team.</p>
+                <p><strong>Ticket:</strong> {self.name}<br/>
+                <strong>Customer:</strong> {self.partner_id.name if self.partner_id else 'Guest'}<br/>
+                <strong>Email:</strong> {self.partner_email or (self.partner_id.email if self.partner_id else 'No email')}</p>
+                """
 
-            self.message_post(
-                body=simple_body,
-                subject=f"New {ticket_type} Ticket Assigned",
-                partner_ids=[team_leader.partner_id.id],
-                message_type='notification',
-                subtype_xmlid='mail.mt_note'  # Use mt_note instead of mt_comment
-            )
-            _logger.info(f"Sent in-app notification to team leader {team_leader.name} for ticket {self.name}")
+                self.message_post(
+                    body=simple_body,
+                    subject=f"New {ticket_type} Ticket Assigned",
+                    partner_ids=[team_leader.partner_id.id],
+                    message_type='notification',
+                    subtype_xmlid='mail.mt_note'
+                )
+                _logger.warning(f"Used fallback notification for ticket {self.name} - template not found")
         except Exception as e:
             _logger.warning(f"Could not send in-app notification for ticket {self.name}: {e}")
 

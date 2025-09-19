@@ -52,13 +52,71 @@ class HelpdeskTicket(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        # Procesar la lógica de enrutamiento ANTES de crear los tickets
+        for vals in vals_list:
+            # Marcar como procesado para evitar procesamiento múltiple
+            if not vals.get('routing_processed', False):
+                vals['routing_processed'] = True
+                # Pre-procesar el enrutamiento basado en email
+                self._preprocess_routing(vals)
+        
+        # Crear los tickets con la lógica ya aplicada
         tickets = super().create(vals_list)
+        
+        # Post-procesamiento solo para notificaciones
         for ticket in tickets:
-            if not ticket.routing_processed:
-                ticket._auto_assign_team()
+            if ticket.routing_processed and not ticket.env.context.get('skip_routing_notification'):
                 ticket._notify_team_leader()
-                ticket.routing_processed = True
+        
         return tickets
+
+    def _preprocess_routing(self, vals):
+        """Pre-process routing logic before ticket creation"""
+        # Extraer email del partner o del campo directo
+        email = vals.get('partner_email')
+        if not email and vals.get('partner_id'):
+            partner = self.env['res.partner'].browse(vals['partner_id'])
+            email = partner.email
+        
+        if email:
+            # Calcular dominio de email
+            domain = email.split('@')[-1].lower()
+            vals['email_domain'] = domain
+            
+            # Determinar si es ticket interno
+            internal_domains = self.env['ir.config_parameter'].sudo().get_param(
+                'Helpdesk_Routing.internal_domains', 'wavext.io'
+            ).split(',')
+            internal_domains = [d.strip().lower() for d in internal_domains]
+            vals['is_internal_ticket'] = domain in internal_domains
+            
+            # Auto-asignar equipo si no está ya asignado
+            if not vals.get('team_id'):
+                team_to_assign = None
+                
+                if vals.get('is_internal_ticket'):
+                    # Equipo interno
+                    internal_team_id = self.env['ir.config_parameter'].sudo().get_param(
+                        'Helpdesk_Routing.internal_team_id'
+                    )
+                    if internal_team_id:
+                        team_to_assign = self.env['helpdesk.ticket.team'].browse(int(internal_team_id))
+                    else:
+                        team_to_assign = self.env.ref('Helpdesk_Routing.internal_helpdesk_team', raise_if_not_found=False)
+                else:
+                    # Equipo externo
+                    external_team_id = self.env['ir.config_parameter'].sudo().get_param(
+                        'Helpdesk_Routing.external_team_id'
+                    )
+                    if external_team_id:
+                        team_to_assign = self.env['helpdesk.ticket.team'].browse(int(external_team_id))
+                    else:
+                        team_to_assign = self.env.ref('Helpdesk_Routing.external_helpdesk_team', raise_if_not_found=False)
+                
+                if team_to_assign and team_to_assign.exists():
+                    vals['team_id'] = team_to_assign.id
+                    ticket_type = "internal" if vals.get('is_internal_ticket') else "external"
+                    _logger.info(f"Pre-assigned ticket to {ticket_type} team: {team_to_assign.name}")
 
     def _auto_assign_team(self):
         """Automatically assign team based on email domain"""
@@ -96,12 +154,17 @@ class HelpdeskTicket(models.Model):
         """Send notification to team leader using email template"""
         self.ensure_one()
 
-        # Check if notifications are enabled
+        # Verificar si las notificaciones están habilitadas
         notifications_enabled = self.env['ir.config_parameter'].sudo().get_param(
             'Helpdesk_Routing.enable_notifications', 'True'
         ).lower() == 'true'
 
         if not notifications_enabled:
+            return
+
+        # Verificar si ya se envió notificación para evitar duplicados
+        if self.env.context.get('notification_sent') or self.env.context.get('skip_routing_notification'):
+            _logger.debug(f"Skipping notification for ticket {self.name} - already sent or skipped")
             return
 
         if not self.team_id or not self.team_id.user_id:
@@ -166,15 +229,19 @@ class HelpdeskTicket(models.Model):
                 _logger.warning(f"Used fallback notification for ticket {self.name} - template not found")
         except Exception as e:
             _logger.warning(f"Could not send in-app notification for ticket {self.name}: {e}")
+        
+        # Marcar notificación como enviada en el contexto para evitar duplicados
+        self.env.context = dict(self.env.context, notification_sent=True)
 
     def write(self, vals):
         result = super().write(vals)
 
-        # If partner_email or partner_id is updated, reprocess routing if needed
+        # Si partner_email o partner_id es actualizado, reprocesar enrutamiento si es necesario
         if ('partner_email' in vals or 'partner_id' in vals) and not vals.get('routing_processed'):
             for ticket in self:
-                if not ticket.team_id:  # Only reassign if no team is set
-                    ticket._auto_assign_team()
+                if not ticket.team_id:  # Solo reasignar si no hay equipo asignado
+                    # Usar el contexto para evitar notificaciones duplicadas
+                    ticket.with_context(skip_routing_notification=True)._auto_assign_team()
                     ticket._notify_team_leader()
                     ticket.routing_processed = True
 
